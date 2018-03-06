@@ -1,0 +1,16 @@
+0:malware-code_reordering
+1:malware-identifier_renaming
+2:malware-data_encoding
+3:malware-change_package_name
+4:malware-call_indirection
+5:malware-junk_code
+6:malware-all
+7:malware-raw
+8:trusted-code_reordering
+9:trusted-identifier_renaming
+10:trusted-data_encoding
+11:trusted-change_package_name
+12:trusted-call_indirection
+13:trusted-junk_code
+14:trusted-all
+15:trusted-raw
