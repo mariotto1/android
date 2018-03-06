@@ -32,7 +32,7 @@ cdef cpp_map[string,float] extract_ngrams_app(vector[string]& app, int ngram_max
     return app_ngrams
 
 
-def extract_ngrams(list data, list labels, int ngram_max_len,bool frequencies, convert_special_chars):  
+def extract_ngrams(list data, list labels, int ngram_max_len,bool frequencies):  
     cdef:
         vector[vector[string]] data_vect
         vector[int] labels_vect
@@ -56,7 +56,7 @@ def extract_ngrams(list data, list labels, int ngram_max_len,bool frequencies, c
         data_vect.clear()
         for path in data[j:j+batch_size]:
             with open(path , 'rb') as f:
-                data_vect.push_back(convert_special_chars(f.read()))
+                data_vect.push_back(f.read().splitlines())
         labels_vect = labels[j:j+batch_size]
         data_len = data_vect.size()
         sys.stdout.write(' '*80+'\r')
@@ -77,7 +77,7 @@ def extract_ngrams(list data, list labels, int ngram_max_len,bool frequencies, c
                             ngrams_neg[ngram]+=value
                     inc(it)
                 with gil:
-                    sys.stdout.write('{}/{} apps\r'.format(k+j,len(data)))
+                    sys.stdout.write('{}/{} apps\r'.format(k+j+1,len(data)))
                     sys.stdout.flush()
     it = ngrams_pos.begin()
     while it != ngrams_pos.end():
@@ -108,7 +108,7 @@ def select_features(list final_ngrams,int h,int k):
     return final_ngrams[-k:]
 
 
-def extract_features(list data, list features, int feature_max_len, bool frequencies, convert_special_chars):
+def extract_features(list data, list features, int feature_max_len, bool frequencies):
     cdef:
         int i
         int j
@@ -123,7 +123,7 @@ def extract_features(list data, list features, int feature_max_len, bool frequen
         data_vect.clear()
         for path in data[j:j+batch_size]:
             with open(path , 'rb') as f:
-                data_vect.push_back(convert_special_chars(f.read()))
+                data_vect.push_back(f.read().splitlines())
         sys.stdout.write(' '*80+'\r')
         sys.stdout.flush()
 
@@ -132,6 +132,6 @@ def extract_features(list data, list features, int feature_max_len, bool frequen
                 extracted_features=extract_ngrams_app(data_vect[i],feature_max_len,frequencies)
                 with gil:
                     data[j+i]=[extracted_features[feature] for feature in features_vector]
-                    sys.stdout.write('{}/{} apps\r'.format(j+i,len(data)))
+                    sys.stdout.write('{}/{} apps\r'.format(j+i+1,len(data)))
                     sys.stdout.flush()
     return data
