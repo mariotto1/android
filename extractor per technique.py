@@ -3,7 +3,7 @@ import sys
 import ngrams
 import numpy
 from sklearn.model_selection import StratifiedKFold
-
+import multiprocessing as mp
 
 def read_apps_from_folder(path, label):
     loaded_apps = 0
@@ -26,11 +26,23 @@ def read_set():
         read_apps_from_folder('dataset/trusted/' + folder + '/', obf_technique_to_index[folder])
 
 
-def convert_special_chars(string):
+def convert_special_chars_mp(string,return_list):
     for symbol in special_chars_to_char:
         string = string.replace(symbol, special_chars_to_char[symbol])
-    return string.splitlines()
+    return_list.append(string)
 
+
+def convert_special_chars(string):
+    manager = mp.Manager()
+    return_list = manager.list()
+    jobs = []
+    for line in string.splitlines():
+        p = mp.Process(target=convert_special_chars_mp, args=(line, return_list))
+        jobs.append(p)
+        p.start()
+    for proc in jobs:
+        proc.join()
+    return [s for s in return_list]
 
 def extract_features(set):
     set = ngrams.extract_features(set, features, ngrams_len, frequencies, convert_special_chars)
