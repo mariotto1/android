@@ -1,6 +1,6 @@
 import os
 import sys
-import ngrams
+import ngrams_per_technique as ngrams
 import numpy
 from sklearn.model_selection import StratifiedKFold
 
@@ -33,7 +33,7 @@ def extract_features(set):
 
 def save():
     type = 'frequencies' if frequencies else 'occurrences'
-    numpy.savez_compressed('dataset/extracted per technique/' + technique.upper() + '/' + type + '/fold' + str(fold),
+    numpy.savez_compressed('dataset/extracted per technique/' + type + '/fold' + str(fold),
                            train=train, test=test, train_labels=train_labels, test_labels=test_labels,
                            train_names=train_names, test_names=test_names)
 
@@ -52,32 +52,32 @@ read_set()
 
 skf = StratifiedKFold(n_splits=10)  # numero di fold
 fold = 1
-for technique in [x for x in obf_technique_to_index if x != 'all']:
-    local_labels = [1 if x == obf_technique_to_index[technique] else 0 for x in labels]
-    for train_indexes, test_indexes in skf.split(data, local_labels):
 
-        print whiteline + '\r',
-        print "Fold ", fold
-        train, test, train_labels, test_labels, train_names, test_names = [], [], [], [], [], []
-        for i in train_indexes:
+for train_indexes, test_indexes in skf.split(data, labels):
+    print whiteline + '\r',
+    print "Fold ", fold
+    train, test, train_labels, test_labels, train_names, test_names = [], [], [], [], [], []
+    for i in train_indexes:
+        if index_to_obf_technique[labels[i]] != 'all':
             train.append(data[i])
-            train_labels.append(local_labels[i])
+            train_labels.append(labels[i])
             train_names.append(data[i].split('/')[-1])
-        for i in test_indexes:
-            test.append(data[i])
-            test_labels.append(local_labels[i])
-            test_names.append(data[i].split('/')[-1])
+    for i in test_indexes:
+        test.append(data[i])
+        test_labels.append(labels[i])
+        test_names.append(data[i].split('/')[-1])
 
-        final_ngrams = ngrams.extract_ngrams(train, train_labels, ngrams_len, frequencies)
+    obf_techniques = [x for x in index_to_obf_technique if index_to_obf_technique[x] != 'all']
+    final_ngrams = ngrams.extract_ngrams(train, train_labels, ngrams_len, frequencies, obf_techniques)
 
-        features = ngrams.select_features(final_ngrams, h=5000, k=2000)
-        del final_ngrams
+    features = ngrams.select_features(final_ngrams, obf_techniques, h=5000, k=2000)
+    del final_ngrams
 
-        print "Extracting train features..."
-        train = extract_features(train)
+    print "Extracting train features..."
+    train = extract_features(train)
 
-        print "Extracting test features..."
-        test = extract_features(test)
+    print "Extracting test features..."
+    test = extract_features(test)
 
-        save()
-        fold += 1
+    save()
+    fold += 1

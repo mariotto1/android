@@ -7,7 +7,7 @@ from cython.operator cimport dereference as deref, preincrement as inc
 import sys
 import multiprocessing
 
-cdef int batch_size=2000
+cdef int batch_size=1000
 cdef int n_core=multiprocessing.cpu_count()
 
 cdef cpp_map[string,float] extract_ngrams_app(vector[string]& app, int ngram_max_len, bool frequencies) nogil:
@@ -32,7 +32,7 @@ cdef cpp_map[string,float] extract_ngrams_app(vector[string]& app, int ngram_max
     return app_ngrams
 
 
-def extract_ngrams(list data, list labels, int ngram_max_len,bool frequencies):  
+def extract_ngrams(list data, list labels, int ngram_max_len,bool frequencies, list obf_techniques):  
     cdef:
         vector[vector[string]] data_vect
         vector[int] labels_vect
@@ -48,6 +48,8 @@ def extract_ngrams(list data, list labels, int ngram_max_len,bool frequencies):
         float pos
         float neg
         cpp_map[string,float].iterator it
+        cpp_map[int,cpp_map[string,float]] technique_ngrams
+        dict technique_labels={}
     
     print "Extracting ngrams..."
     for j in range(0,len(data),batch_size):
@@ -62,6 +64,9 @@ def extract_ngrams(list data, list labels, int ngram_max_len,bool frequencies):
         sys.stdout.write(' '*80+'\r')
         sys.stdout.flush()
 
+        for tech in obf_techniques:
+            technique_labels[tech]=[1 if x==tech else 0 for x in labels_vect]
+
         with nogil, parallel(num_threads=n_core):
             for k in prange(data_len,schedule='dynamic'):
                 app_ngrams=extract_ngrams_app(data_vect[k],ngram_max_len,frequencies)
@@ -69,43 +74,58 @@ def extract_ngrams(list data, list labels, int ngram_max_len,bool frequencies):
                 while it != app_ngrams.end():
                     ngram,value = deref(it).first, deref(it).second
                     with gil:
-                        if labels_vect[k]>0:
-                            ngrams_pos[ngram]+=value
-                            ngrams_neg[ngram]+=0  #per inizializzarlo se non esiste
-                        elif labels_vect[k]<=0:
-                            ngrams_pos[ngram]+=0  #per inizializzarlo se non esiste
-                            ngrams_neg[ngram]+=value
+                        for tech in obf_techniques: 
+                            if technique_labels[tech][k]>0:
+                                technique_ngrams[tech][ngram]+=value
+                                technique_ngrams[-tech][ngram]+=0  #per inizializzarlo se non esiste
+                            elif technique_labels[tech][k]<=0:
+                                technique_ngrams[tech][ngram]+=0  #per inizializzarlo se non esiste
+                                technique_ngrams[-tech][ngram]+=value
                     inc(it)
                 with gil:
                     sys.stdout.write('{}/{} apps\r'.format(k+j+1,len(data)))
                     sys.stdout.flush()
-    it = ngrams_pos.begin()
-    while it != ngrams_pos.end():
-        ngram, value = deref(it).first, deref(it).second
-        pos=value/sum(1 for x in labels if x>0) 
-        neg=ngrams_neg[ngram]/sum(1 for x in labels if x<=0) 
-        if abs(neg-pos)/max(neg,pos) < 1.0:
-            total_ngrams.append((ngram,abs(neg-pos)/max(neg,pos)))
-        inc(it)
+    for tech in obf_techniques:
+        tech_total_ngrams=[]
+        it = technique_ngrams[tech].begin()
+        while it != technique_ngrams[tech].end():
+            ngram, value = deref(it).first, deref(it).second
+            pos=value/labels.count(tech)
+            neg=technique_ngrams[-tech][ngram]/(len(labels)-labels.count(tech)) 
+            if abs(neg-pos)/max(neg,pos) < 1.0:
+                tech_total_ngrams.append((ngram,abs(neg-pos)/max(neg,pos)))
+            inc(it)
+        total_ngrams.append(tech_total_ngrams)
+        tech_total_ngrams=[]
     return total_ngrams
 
 
-def select_features(list final_ngrams,int h,int k):
+def select_features(list final_ngrams_list,list obf_techniques,int h,int k):
     print "Selecting top {} features...".format(k)
-    final_ngrams.sort(key=lambda tup: tup[1])
-    final_ngrams = [x[0] for x in final_ngrams[-h:]]
-    cdef int i = 0
-    while i < len(final_ngrams):
-        delete = False
+    cdef list selected_features=[]
+    cdef int i
+    cdef int j
+    for final_ngrams in final_ngrams_list:
+        final_ngrams.sort(key=lambda tup: tup[1],reverse=True)
+        final_ngrams = [x[0] for x in final_ngrams[:h]]
+        i = 0
+        while i < len(final_ngrams):
+            delete = False
+            for ngram in final_ngrams:
+                if final_ngrams[i] != ngram and final_ngrams[i] in ngram:
+                    delete = True
+                    break
+            if delete:
+                del final_ngrams[i]
+            else:
+                i += 1
+        final_ngrams= final_ngrams[:k]
+        j=0
         for ngram in final_ngrams:
-            if final_ngrams[i] != ngram and final_ngrams[i] in ngram:
-                delete = True
-                break
-        if delete:
-            del final_ngrams[i]
-        else:
-            i += 1
-    return final_ngrams[-k:]
+            if j<=k/len(obf_techniques) and ngram not in selected_features:
+                selected_features.append(ngram)
+                j+=1
+    return selected_features
 
 
 def extract_features(list data, list features, int feature_max_len, bool frequencies):
@@ -135,4 +155,3 @@ def extract_features(list data, list features, int feature_max_len, bool frequen
                     sys.stdout.write('{}/{} apps\r'.format(j+i+1,len(data)))
                     sys.stdout.flush()
     return data
-
