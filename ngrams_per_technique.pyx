@@ -88,10 +88,12 @@ def extract_ngrams(list data, list labels, int ngram_max_len,bool frequencies, l
     for tech in obf_techniques:
         tech_total_ngrams=[]
         it = technique_ngrams[tech].begin()
+        pos_len=labels.count(tech)
+        neg_len=len(labels)-pos_len
         while it != technique_ngrams[tech].end():
             ngram, value = deref(it).first, deref(it).second
-            pos=value/labels.count(tech)
-            neg=technique_ngrams[-tech][ngram]/(len(labels)-labels.count(tech)) 
+            pos=value/pos_len
+            neg=technique_ngrams[-tech][ngram]/neg_len
             if abs(neg-pos)/max(neg,pos) < 1.0:
                 tech_total_ngrams.append((ngram,abs(neg-pos)/max(neg,pos)))
             inc(it)
