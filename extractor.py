@@ -26,14 +26,8 @@ def read_set():
         read_apps_from_folder('dataset/trusted/' + folder + '/', -obf_technique_to_index[folder])
 
 
-def convert_special_chars(string):
-    for symbol in special_chars_to_char:
-        string = string.replace(symbol, special_chars_to_char[symbol])
-    return string.splitlines()
-
-
 def extract_features(set):
-    set = ngrams.extract_features(set, features, ngrams_len, frequencies, convert_special_chars)
+    set = ngrams.extract_features(set, features, ngrams_len, frequencies)
     return numpy.array(set).astype(numpy.float32)
 
 
@@ -49,17 +43,10 @@ max_apps_per_technique, ngrams_len = int(sys.argv[1]), int(sys.argv[2])
 frequencies = True if sys.argv[3] == 'yes' else False
 
 whiteline = " " * 80
-special_chars_to_char = {}
-char_to_special_chars = {}
 obf_technique_to_index = {}
 index_to_obf_technique = {}
 data = []
 labels = []
-
-with open('special_chars_to_char', 'rb') as f:
-    for line in f.read().splitlines():
-        special_chars_to_char[line.split(' -> ')[0]] = line.split(' -> ')[1]
-        char_to_special_chars[line.split(' -> ')[1]] = line.split(' -> ')[0]
 
 read_set()
 
@@ -83,7 +70,7 @@ for train_indexes, test_indexes in skf.split(data, labels):
         test_labels.append(labels[i])
         test_names.append(data[i].split('/')[-1])
 
-    final_ngrams = ngrams.extract_ngrams(train, train_labels, ngrams_len, frequencies, convert_special_chars)
+    final_ngrams = ngrams.extract_ngrams(train, train_labels, ngrams_len, frequencies)
 
     features = ngrams.select_features(final_ngrams, h=5000, k=2000)
     del final_ngrams
